@@ -35,3 +35,4 @@ spec:
   - name: http
     targetPort: 3000
     port: 80
+    nodePort: 31112
