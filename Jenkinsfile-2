@@ -1,0 +1,73 @@
+pipeline{
+    agent any
+
+	environment {
+		DOCKERHUB_CREDENTIALS=credentials('dockerhublogin')
+	}
+
+	stages {
+	    
+	    stage('gitclone') {
+
+			steps {
+				git branch: 'main', url: 'https://github.com/BharathSharath/jenkins-kubernetes-example.git'
+			}
+		}
+
+		stage('Build') {
+
+			steps {
+				sh 'docker build -t bharathsharath/nodejsapp-1.0:latest .'
+			}
+		}
+
+		stage('Login') {
+
+			steps {
+				sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+			}
+		}
+		stage('Push') {
+
+			steps {
+				sh 'docker push bharathsharath/nodejsapp-1.0:latest'
+			}
+		}
+           
+    
+        stage('Delete previous deployment ') {
+            steps {
+                sshagent(['k8s']) {
+                sh "scp -o StrictHostKeyChecking=no nodejsapp.yaml ubuntu@172.31.5.125:/home/ubuntu"
+                script {
+                      sh "ssh ubuntu@172.31.5.125 kubectl delete -f ."
+                      sh "ssh ubuntu@172.31.5.125 sleep 10"
+                    }
+                }    
+            }
+        }
+        stage('Delete old image on node') {
+            steps {
+                sshagent(['k8s']) {
+                sh "scp -o StrictHostKeyChecking=no nodejsapp.yaml ubuntu@172.31.7.22:/home/ubuntu"
+                script {
+                      
+                      sh "ssh ubuntu@172.31.7.22 sudo docker rmi -f bharathsharath/nodejsapp-1.0:latest"
+                      
+                      
+                    }
+                }
+            }
+        }
+        stage('Deploy the updated one') {
+            steps {
+                sshagent(['k8s']) {
+                sh "scp -o StrictHostKeyChecking=no nodejsapp.yaml ubuntu@172.31.5.125:/home/ubuntu"
+                script {
+                      sh "ssh ubuntu@172.31.5.125 kubectl apply -f ."
+                    }
+                }    
+            }
+        }
+    }
+}
